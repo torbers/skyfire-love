@@ -35,18 +35,26 @@ local player = {
 
 		absolute_rot = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0)),   -- actual rotation of model; self.node:set_rotation(zero_rot * d_rot_t)
 
-		absolute_rot_vector = vec3(0, 0, 0),                                            -- actual vector where nose is pointing
+		absolute_rot_vector = vec3(0, 0, 1),                                            -- actual vector where nose is pointing
+
+		radial_out_rot_vector = vec3(0, 1, 0),                                          -- vector orthoganal to rotation vector pointing "up"
+		
+
+		radial_cross_section = 10.0,  -- area of model looking down from radial out
+
+		d_vel_air = vec3(0, 0, 0),    -- acceleration caused by air (only in radial out direction for now)
 
 
 		zero_pos = vec3(0, 0, 0),     -- offset
 
 		d_vel = vec3(0, 0, 0),        -- acc vector
 
-		d_pos = vec3(0, 0, 0),        -- velocity vector
+		d_pos = vec3(0, 0, 0),        -- velocity vector (prograde)
 
 		d_pos_t = vec3(0, 0, 0),      -- position before offset; d_pos_t = d_pos_t + d_pos * dt
 
 		absolute_pos = vec3(0, 0, 0), -- position in game space; absolute_pos = absolute_pos + d_pos_t
+
 	},
 
 	gun = {
@@ -65,16 +73,29 @@ local player = {
 
 }
 
+local air_pressure = 1.0
 
 function player:update(dt)
-	player.root.d_rot_t = player.root.d_rot_t * (player.root.d_rot * dt)
-	player.root.absolute_rot = player.root.zero_rot * player.root.d_rot_t
-
-	player.root.d_pos_t = player.root.d_pos * dt + player.root.d_pos_t
-	player.root.absolute_pos =  player.root.zero_pos + player.root.d_pos_t
 
 	-- velocity vector depends on rotation vector but with a delay, especially in low air pressure environments
 	-- oh shit it's vector projection i think
+
+	player.root.d_vel_air = vec3.dot(player.root.d_pos, player.root.radial_out_rot_vector:normalize()) * player.root.air_surface_area * air_pressure
+
+
+	-- update positions from velocities
+	-- these are quats for rotation
+	player.root.d_rot_t = player.root.d_rot_t * (player.root.d_rot * dt)
+	player.root.absolute_rot = player.root.zero_rot * player.root.d_rot_t
+
+	-- these are vec3 for pos/vel/acc vectors
+
+	player.root.d_vel = player.root.d_vel + player.root.d_vel_air
+	player.root.d_pos = player.root.d_pos + player.root.d_vel
+	player.root.d_pos_t = player.root.d_pos * dt + player.root.d_pos_t
+	player.root.absolute_pos =  player.root.zero_pos + player.root.d_pos_t
+
+	-- need to figure out node system to actually apply. boo
 end
 
 
