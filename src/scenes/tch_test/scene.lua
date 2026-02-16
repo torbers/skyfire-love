@@ -33,6 +33,10 @@ local player = {
 
 		d_rot_t = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0)),        -- rot from zero; d_rot_t = d_rot_t * (d_rot * dt)
 
+		roll = 0,     -- rpy (relative to zero)
+		pitch = 0,
+		yaw = 0,
+
 		absolute_rot = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0)),   -- actual rotation of model; self.node:set_rotation(zero_rot * d_rot_t)
 
 		absolute_rot_vector = vec3(0, 0, 1),                                            -- actual vector where nose is pointing
@@ -42,7 +46,11 @@ local player = {
 
 		radial_cross_section = 10.0,  -- area of model looking down from radial out
 
+		thrust = 1.0,                 -- scalar value of thrust
+
 		d_vel_air = vec3(0, 0, 0),    -- acceleration caused by air (only in radial out direction for now)
+
+		d_vel_thrust = vec3(0, 0, 0), -- thrust vector as acc. d_vel_thrust = absolute_rot_vector * thrust
 
 
 		zero_pos = vec3(0, 0, 0),     -- offset
@@ -76,21 +84,29 @@ local player = {
 local air_pressure = 1.0
 
 function player:update(dt)
+	-- do rotation update here
+	-- speed of rotation probably depends on vec3.dot(player.root.absolute_rot_vector, player.root.d_pos)
 
-	-- velocity vector depends on rotation vector but with a delay, especially in low air pressure environments
-	-- oh shit it's vector projection i think
-
-	player.root.d_vel_air = vec3.dot(player.root.d_pos, player.root.radial_out_rot_vector:normalize()) * player.root.air_surface_area * air_pressure
-
-
-	-- update positions from velocities
 	-- these are quats for rotation
 	player.root.d_rot_t = player.root.d_rot_t * (player.root.d_rot * dt)
 	player.root.absolute_rot = player.root.zero_rot * player.root.d_rot_t
 
-	-- these are vec3 for pos/vel/acc vectors
+		-- get normalized absolute rot vector
+	 local x, y, z, w = ((player.root.absolute_rot * quat(0, 0, 1, 0)) * player.root.absolute_rot:conjugate()):unpack()
+	 player.root.absolute_rot_vector = vec3(x, y, z)
 
-	player.root.d_vel = player.root.d_vel + player.root.d_vel_air
+		-- calculate acceleration vector
+	-- make thrust vector
+	player.root.d_vel_thrust = player.root.absolute_rot_vector * player.root.thrust
+
+	-- make air vector
+	--player.root.d_vel_air
+
+	player.root.d_vel = player.root.d_vel_thrust + player.root.d_vel_air
+
+
+		-- update vel and pos from acc
+	-- these are vec3 for pos/vel/acc vectors
 	player.root.d_pos = player.root.d_pos + player.root.d_vel
 	player.root.d_pos_t = player.root.d_pos * dt + player.root.d_pos_t
 	player.root.absolute_pos =  player.root.zero_pos + player.root.d_pos_t
@@ -162,12 +178,14 @@ function scene:update(dt)
 
 	-- spinning angle for testing
 	self.angle = self.angle + 100*dt
+	
+
+	if love.keyboard.isDown('a')
+		-- player.root.d_rot_t += dt -- no
+	end
+
 
 	-- self.root_node.rot_angle = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0)) --yaw, pitch, roll
-	
-	-- camera rotations relative to player model
-	self.camera.zero_rot_to_model = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0))
-	self.camera.rot_to_model = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0))
 
 	-- get angle to reticle
 	local aim_plane = 1024/2
@@ -177,25 +195,26 @@ function scene:update(dt)
 	local vax, vay, vaz = aim_vector:unpack()
 	local aim_quat = quat.from_euler_angles(-math.asin(vax / vaz), math.asin(vay / vaz), 0)
 
-	ship.rot_angle = quat.slerp(ship.rot_angle, aim_quat, 5 * dt)
+	player.root.d_rot_t = quat.slerp(player.root.d_rot_t, aim_quat, 5*dt)
+	player.root.absolute_rot = player.root.zero_rot * player.root.d_rot_t
 
-	ship.actual.roll, ship.actual.pitch, ship.actual.yaw = ship.rot_angle:to_euler()
-	ship.actual.yaw = -ship.actual.yaw
 
-	--print(ship.actual.yaw)
-	--print(ship.actual.pitch)
+	player.root.roll, player.root.pitch, player.root.yaw = player.root.d_rot_t:to_euler()
+	player.root.yaw = -player.root.yaw
 
 	ship.actual_screen_aim = {  
-		x = math.tan(ship.actual.yaw) * aim_plane + width / 2,
-		y = math.tan(ship.actual.pitch) * aim_plane + height / 2,
+		x = math.tan(player.root.yaw) * aim_plane + width / 2,
+		y = math.tan(player.root.pitch) * aim_plane + height / 2,
 	}
 
-
-	--ship.rot_angle = quat.from_angle_axis(math.rad(180), vax, vay, vaz)
-
-	self.root_node:set_rotation(ship.zero_rot * ship.rot_angle)
+	self.root_node:set_rotation(player.root.absolute_rot)
 
 
+
+
+	-- camera rotations relative to player model
+	self.camera.zero_rot_to_model = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0))
+	self.camera.rot_to_model = quat.from_euler_angles(math.rad(0), math.rad(0), math.rad(0))
 
 	-- rotate the camera
 	local v = vec3(6, 0, 0)

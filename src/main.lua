@@ -106,8 +106,11 @@ function getMousePositionInWindow() -- get position of mouse in pixels
 end
 
 function love.mousemoved(...)
-
 	menori.app:handle_event('mousemoved', getMousePositionInWindow())
+end
+
+function love.keypressed(...)
+	menori.app:handle_event('keypressed', ...)
 end
 
 
