@@ -180,7 +180,7 @@ function scene:update(dt)
 	self.angle = self.angle + 100*dt
 	
 
-	if love.keyboard.isDown('a')
+	if love.keyboard.isDown('a') then
 		-- player.root.d_rot_t += dt -- no
 	end
 
